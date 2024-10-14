@@ -1231,6 +1231,27 @@ invalid_operation:
 }
 
 static void
+gum_v8_cancellable_interrupt_handler (v8::Isolate * isolate,
+                                      void * opaque)
+{
+  if (opaque == NULL)
+    return;
+
+  GCancellable * cancellable = (GCancellable *)opaque;
+  // Increment the reference count to avoid uaf
+  g_object_ref (cancellable);
+
+  g_print ("We are inside the v8 int handler...\n");
+
+  // Check if the operation was cancelled
+  if (g_cancellable_is_cancelled (cancellable))
+  {
+    g_print ("Cancelled inside, throwing...\n");
+    isolate->ThrowException (v8::String::NewFromUtf8 (isolate, "Execution cancelled").ToLocalChecked ());
+  }
+}
+
+static void
 gum_v8_script_execute_entrypoints (GumV8Script * self,
                                    GumScriptTask * task)
 {
@@ -1243,6 +1264,10 @@ gum_v8_script_execute_entrypoints (GumV8Script * self,
     auto runtime = gum_v8_bundle_new (isolate, gumjs_runtime_modules);
     gum_v8_bundle_run (runtime);
     gum_v8_bundle_free (runtime);
+
+    // Check if the task was provided a cancellable
+    if (task->cancellable != NULL)
+      isolate->RequestInterrupt (gum_v8_cancellable_interrupt_handler, task->cancellable);
 
     auto program = self->program;
     if (program->entrypoints != NULL)
