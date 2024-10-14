@@ -681,13 +681,19 @@ gum_cancellable_interrupt_handler (JSRuntime * runtime,
   if (opaque == NULL)
     return 0;
 
-  GCancellable *cancellable = (GCancellable *)opaque;
+  GCancellable * cancellable = (GCancellable *)opaque;
+  // Increment the reference count to avoid uaf
+  g_object_ref (cancellable);
 
+  int rc = 0;
   // Check if the operation was cancelled
   if (g_cancellable_is_cancelled (cancellable))
-    return 1;
+  {
+    rc = 1;
+    g_object_unref (cancellable);
+  }
 
-  return 0;
+  return rc;
 }
 
 static void
