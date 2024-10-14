@@ -678,16 +678,16 @@ static int
 gum_cancellable_interrupt_handler (JSRuntime * runtime,
                                    void * opaque)
 {
-    if (opaque == NULL)
-      return 0;
-
-    GCancellable *cancellable = (GCancellable *)opaque;
-
-    // Check if the operation was cancelled
-    if (g_cancellable_is_cancelled (cancellable))
-      return 1;
-
+  if (opaque == NULL)
     return 0;
+
+  GCancellable *cancellable = (GCancellable *)opaque;
+
+  // Check if the operation was cancelled
+  if (g_cancellable_is_cancelled (cancellable))
+    return 1;
+
+  return 0;
 }
 
 static void
