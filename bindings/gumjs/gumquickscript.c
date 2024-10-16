@@ -744,13 +744,13 @@ gum_quick_script_execute_entrypoints (GumQuickScript * self,
 
   _gum_quick_scope_enter (&scope, &self->core);
 
-  g_print ("Checking cancellable!\n");
-  // Check if the task was provided a cancellable
-  if (task->cancellable != NULL)
-  {
-    g_print ("Setting our handler!\n");
-    JS_SetInterruptHandler (JS_GetRuntime (ctx), gum_cancellable_interrupt_handler, task->cancellable);
-  }
+  // g_print ("Checking cancellable!\n");
+  // // Check if the task was provided a cancellable
+  // if (task->cancellable != NULL)
+  // {
+  //   g_print ("Setting our handler!\n");
+  //   JS_SetInterruptHandler (JS_GetRuntime (ctx), gum_cancellable_interrupt_handler, task->cancellable);
+  // }
 
   gum_quick_bundle_load (gumjs_runtime_modules, ctx);
 
