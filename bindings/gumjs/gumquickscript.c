@@ -687,7 +687,13 @@ static int
 gum_cancellable_interrupt_handler (JSRuntime * runtime,
                                    void * opaque)
 {
-  g_print ("interrupt handler called!\n");
+  g_print ("[int-handler] In our interrupt handler!!\n");
+  if (opaque == NULL)
+    return 0;
+
+  // GCancellable * cancellable = (GCancellable *)opaque;
+  // // Increment the reference count to avoid uaf
+  // g_object_ref (cancellable);
 
   g_mutex_init(&gGumJSTerminationMutex);
   int rc = 0;
@@ -701,6 +707,10 @@ gum_cancellable_interrupt_handler (JSRuntime * runtime,
   }
   
   g_mutex_clear(&gGumJSTerminationMutex);
+  //   g_print ("[int-handler] We are cancelled!\n");
+  // }
+  // g_object_unref (cancellable);
+
   return rc;
 }
 
