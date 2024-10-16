@@ -18,6 +18,8 @@ G_DECLARE_FINAL_TYPE (GumQuickScript, gum_quick_script, GUM_QUICK, SCRIPT,
 G_GNUC_INTERNAL gboolean gum_quick_script_create_context (GumQuickScript * self,
     GError ** error);
 
+GUM_API void gum_quick_set_is_cancelled(gboolean status);
+
 G_END_DECLS
 
 #endif

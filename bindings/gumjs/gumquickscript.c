@@ -191,6 +191,10 @@ struct _GumWorkerMessageDelivery
   GBytes * data;
 };
 
+// To be used to query termination
+static GMutex gGumJSTerminationMutex;
+static gboolean gGumJSWasTerminated = false;
+
 static void gum_quick_script_iface_init (gpointer g_iface, gpointer iface_data);
 
 static void gum_quick_script_dispose (GObject * object);
@@ -264,6 +268,9 @@ static void gum_quick_worker_do_emit (GumWorkerMessageDelivery * d);
 static GumWorkerMessageDelivery * gum_worker_message_delivery_new (
     GumQuickWorker * worker, const gchar * message, GBytes * data);
 static void gum_worker_message_delivery_free (GumWorkerMessageDelivery * d);
+
+void
+gum_quick_register_interrupt_handler(JSContext * ctx);
 
 G_DEFINE_TYPE_EXTENDED (GumQuickScript,
                         gum_quick_script,
@@ -660,6 +667,8 @@ gum_quick_script_do_load (GumScriptTask * task,
 
   self->state = GUM_SCRIPT_STATE_LOADING;
 
+  gum_quick_register_interrupt_handler(self->ctx);
+
   gum_quick_script_execute_entrypoints (self, task);
 
   return;
@@ -678,24 +687,39 @@ static int
 gum_cancellable_interrupt_handler (JSRuntime * runtime,
                                    void * opaque)
 {
-  g_print ("[int-handler] In our interrupt handler!!\n");
-  if (opaque == NULL)
-    return 0;
+  g_print ("interrupt handler called!\n");
 
-  GCancellable * cancellable = (GCancellable *)opaque;
-  // Increment the reference count to avoid uaf
-  g_object_ref (cancellable);
-
+  g_mutex_init(&gGumJSTerminationMutex);
   int rc = 0;
-  // Check if the operation was cancelled
-  if (g_cancellable_is_cancelled (cancellable))
-  {
+  
+  // Check if we are cancelled
+  if (gGumJSWasTerminated) {
+    GDateTime * now = g_date_time_new_now_local();
+    gchar * timestamp_str = g_date_time_format(now, "%Y-%m-%d %H:%M:%S");
+    g_print ("We are cancelled: %s!\n", timestamp_str);
     rc = 1;
-    g_print ("[int-handler] We are cancelled!\n");
   }
-  g_object_unref (cancellable);
-
+  
+  g_mutex_clear(&gGumJSTerminationMutex);
   return rc;
+}
+
+void
+gum_quick_register_interrupt_handler(JSContext * ctx) {
+    JSRuntime * runtime = JS_GetRuntime (ctx);
+    g_print ("Registering int. handler!\n");
+    gum_quick_set_is_cancelled(false);
+    JS_SetInterruptHandler (runtime, gum_cancellable_interrupt_handler, NULL);
+}
+
+GUM_API void
+gum_quick_set_is_cancelled(gboolean status) {
+   g_mutex_init(&gGumJSTerminationMutex);
+   gGumJSWasTerminated = status;
+   GDateTime * now = g_date_time_new_now_local();
+   gchar * timestamp_str = g_date_time_format(now, "%Y-%m-%d %H:%M:%S");
+   g_print ("gum_quick_script_cancel: %d %s!\n", status, timestamp_str);
+   g_mutex_clear(&gGumJSTerminationMutex);
 }
 
 static void
@@ -739,6 +763,11 @@ gum_quick_script_execute_entrypoints (GumQuickScript * self,
       result = JS_EvalFunction (ctx, g_array_index (entrypoints, JSValue, i));
       if (JS_IsException (result))
       {
+        JSValue exception = JS_GetException(ctx);
+        const char *error = JS_ToCString(ctx, exception);
+        g_print ("Script Error: %s\n", error);
+        JS_FreeCString(ctx, error);
+        JS_FreeValue(ctx, exception);
         _gum_quick_scope_catch_and_emit (&scope);
       }
       else
@@ -786,7 +815,14 @@ gum_quick_script_execute_entrypoints (GumQuickScript * self,
 
       result = JS_EvalFunction (ctx, g_array_index (entrypoints, JSValue, i));
       if (JS_IsException (result))
+      {
+        JSValue exception = JS_GetException(ctx);
+        const char *error = JS_ToCString(ctx, exception);
+        g_print ("Script Error: %s\n", error);
+        JS_FreeCString(ctx, error);
+        JS_FreeValue(ctx, exception);
         _gum_quick_scope_catch_and_emit (&scope);
+      }
 
       JS_FreeValue (ctx, result);
     }
