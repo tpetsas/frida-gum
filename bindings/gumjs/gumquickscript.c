@@ -56,6 +56,7 @@ struct _GumQuickScript
   GumQuickScriptBackend * backend;
 
   GumScriptState state;
+  gboolean is_cancelled;
   GSList * on_unload;
   JSRuntime * rt;
   JSContext * ctx;
@@ -191,9 +192,11 @@ struct _GumWorkerMessageDelivery
   GBytes * data;
 };
 
+#if 0
 // To be used to query termination
 static GMutex gGumJSTerminationMutex;
 static gboolean gGumJSWasTerminated = false;
+#endif
 
 static void gum_quick_script_iface_init (gpointer g_iface, gpointer iface_data);
 
@@ -234,6 +237,7 @@ static void gum_quick_script_complete_unload_task (GumQuickScript * self,
 static void gum_quick_script_try_unload (GumQuickScript * self);
 static void gum_quick_script_once_unloaded (GumQuickScript * self,
     GumUnloadNotifyFunc func, gpointer data, GDestroyNotify data_destroy);
+static void gum_quick_script_cancel (GumScript * script);
 
 static void gum_quick_script_set_message_handler (GumScript * script,
     GumScriptMessageHandler handler, gpointer data,
@@ -270,7 +274,7 @@ static GumWorkerMessageDelivery * gum_worker_message_delivery_new (
 static void gum_worker_message_delivery_free (GumWorkerMessageDelivery * d);
 
 void
-gum_quick_register_interrupt_handler(JSContext * ctx);
+gum_quick_register_interrupt_handler(GumQuickScript * script);
 
 G_DEFINE_TYPE_EXTENDED (GumQuickScript,
                         gum_quick_script,
@@ -320,6 +324,7 @@ gum_quick_script_iface_init (gpointer g_iface,
   iface->unload = gum_quick_script_unload;
   iface->unload_finish = gum_quick_script_unload_finish;
   iface->unload_sync = gum_quick_script_unload_sync;
+  iface->cancel = gum_quick_script_cancel;
 
   iface->set_message_handler = gum_quick_script_set_message_handler;
   iface->post = gum_quick_script_post;
@@ -627,6 +632,7 @@ gum_quick_script_load (GumScript * script,
   GumQuickScript * self = GUM_QUICK_SCRIPT (script);
   GumScriptTask * task;
 
+  self->is_cancelled = false;
   task = gum_script_task_new ((GumScriptTaskFunc) gum_quick_script_do_load,
       self, cancellable, callback, user_data);
   gum_script_task_run_in_js_thread (task,
@@ -648,6 +654,7 @@ gum_quick_script_load_sync (GumScript * script,
   GumQuickScript * self = GUM_QUICK_SCRIPT (script);
   GumScriptTask * task;
 
+  self->is_cancelled = false;
   task = gum_script_task_new ((GumScriptTaskFunc) gum_quick_script_do_load,
       self, cancellable, NULL, NULL);
   gum_script_task_run_in_js_thread_sync (task,
@@ -665,9 +672,10 @@ gum_quick_script_do_load (GumScriptTask * task,
   if (self->state != GUM_SCRIPT_STATE_CREATED)
     goto invalid_operation;
 
+
   self->state = GUM_SCRIPT_STATE_LOADING;
 
-  gum_quick_register_interrupt_handler(self->ctx);
+  gum_quick_register_interrupt_handler(self);
 
   gum_quick_script_execute_entrypoints (self, task);
 
@@ -683,6 +691,7 @@ invalid_operation:
   }
 }
 
+// XXX should be called after load or load_sync!
 static int
 gum_cancellable_interrupt_handler (JSRuntime * runtime,
                                    void * opaque)
@@ -690,38 +699,33 @@ gum_cancellable_interrupt_handler (JSRuntime * runtime,
   g_print ("[int-handler] In our interrupt handler!!\n");
   if (opaque == NULL)
     return 0;
+  GumQuickScript *script = (GumQuickScript *) opaque;
+  g_object_ref(script);
 
-  // GCancellable * cancellable = (GCancellable *)opaque;
-  // // Increment the reference count to avoid uaf
-  // g_object_ref (cancellable);
-
-  g_mutex_init(&gGumJSTerminationMutex);
   int rc = 0;
-  
+
   // Check if we are cancelled
-  if (gGumJSWasTerminated) {
+  if (script->is_cancelled) {
     GDateTime * now = g_date_time_new_now_local();
     gchar * timestamp_str = g_date_time_format(now, "%Y-%m-%d %H:%M:%S");
     g_print ("We are cancelled: %s!\n", timestamp_str);
     rc = 1;
   }
-  
-  g_mutex_clear(&gGumJSTerminationMutex);
-  //   g_print ("[int-handler] We are cancelled!\n");
-  // }
-  // g_object_unref (cancellable);
+
+  g_object_unref (script);
 
   return rc;
 }
 
 void
-gum_quick_register_interrupt_handler(JSContext * ctx) {
-    JSRuntime * runtime = JS_GetRuntime (ctx);
+gum_quick_register_interrupt_handler(GumQuickScript * script) {
     g_print ("Registering int. handler!\n");
-    gum_quick_set_is_cancelled(false);
-    JS_SetInterruptHandler (runtime, gum_cancellable_interrupt_handler, NULL);
+    g_assert (script->is_cancelled == false);
+    JS_SetInterruptHandler (script->rt, gum_cancellable_interrupt_handler,
+        script);
 }
 
+#if 0
 GUM_API void
 gum_quick_set_is_cancelled(gboolean status) {
    g_mutex_init(&gGumJSTerminationMutex);
@@ -731,6 +735,7 @@ gum_quick_set_is_cancelled(gboolean status) {
    g_print ("gum_quick_script_cancel: %d %s!\n", status, timestamp_str);
    g_mutex_clear(&gGumJSTerminationMutex);
 }
+#endif
 
 static void
 gum_quick_script_execute_entrypoints (GumQuickScript * self,
@@ -952,6 +957,15 @@ gum_quick_script_unload_finish (GumScript * script,
 {
   gum_script_task_propagate_pointer (GUM_SCRIPT_TASK (result), NULL);
 }
+
+// XXX This should be called after gum_quick_script_(load|load_sync)
+static void
+gum_quick_script_cancel (GumScript * script)
+{
+  GumQuickScript * self = GUM_QUICK_SCRIPT (script);
+  self->is_cancelled = true;
+}
+
 
 static void
 gum_quick_script_unload_sync (GumScript * script,

@@ -47,6 +47,8 @@ G_GNUC_INTERNAL void gum_script_task_run_in_js_thread_sync (
 
 G_END_DECLS
 
+// TODO: we should move struct _GumScriptTask back to gumscripttask.c when we are done to preserve the opaque nature of the type
+
 struct _GumScriptTask
 {
   GObject parent;
