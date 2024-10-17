@@ -708,7 +708,7 @@ gum_cancellable_interrupt_handler (JSRuntime * runtime,
   if (script->is_cancelled) {
     GDateTime * now = g_date_time_new_now_local();
     gchar * timestamp_str = g_date_time_format(now, "%Y-%m-%d %H:%M:%S");
-    g_print ("We are cancelled: %s!\n", timestamp_str);
+    g_print ("We (0x%p) are cancelled: %s!\n", script, timestamp_str);
     rc = 1;
   }
 
