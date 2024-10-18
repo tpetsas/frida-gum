@@ -2030,6 +2030,9 @@ _gum_quick_scope_perform_pending_io (GumQuickScope * self)
   while (io_performed);
 }
 
+// XXX TODO: create a _gum_quick_scope_cancel that is a more abrupt version of
+// leave. It shouldn't process any io or finish any pending stalker state
+
 void
 _gum_quick_scope_leave (GumQuickScope * self)
 {
