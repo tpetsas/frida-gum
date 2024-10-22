@@ -21,7 +21,7 @@
 
 // g_print with color on tag only
 #define GPRINT_CTAG(colorTag, tag, format, ...) \
-  g_print(colorTag tag RESET " " format, ##__VA_ARGS__)
+    g_print(colorTag tag RESET " " "[%lu]" " " format, gum_process_get_current_thread_id(),  ##__VA_ARGS__); \
 // g_print with color
 #define GPRINT_C(color, format, ...) \
   g_print(color format RESET, ##__VA_ARGS__)
@@ -29,7 +29,7 @@
 #define GPRINT_CTAG_IC(colorTag, tag, format, ...) \
   do { \
     if (self->is_cancelled) { \
-      g_print(colorTag tag RESET " " format, ##__VA_ARGS__); \
+      g_print(colorTag tag RESET " " "[%lu]" " " format, gum_process_get_current_thread_id(),  ##__VA_ARGS__); \
     } \
   } while (0)
 // g_print with color  if self->is_cancelled
