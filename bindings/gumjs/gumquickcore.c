@@ -38,6 +38,9 @@
 // XXX for debug prints
 #include "debugprint.h"
 
+// XXX for debug prints
+#include "debugprint.h"
+
 #define GUM_QUICK_FFI_FUNCTION_PARAMS_EMPTY { NULL, }
 
 typedef struct _GumQuickWeakCallback GumQuickWeakCallback;
