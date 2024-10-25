@@ -1968,10 +1968,8 @@ _gum_quick_scope_call_void (GumQuickScope * self,
   JSValue result;
 
   result = _gum_quick_scope_call (self, func_obj, this_obj, argc, argv);
-  if (JS_IsException (result)) {
-    GPRINT_CTAG(BOLDYELLOW, "[core void-call]", "End of entry points execution !\n");
+  if (JS_IsException (result))
     return FALSE;
-  }
 
   JS_FreeValue (self->core->ctx, result);
 
