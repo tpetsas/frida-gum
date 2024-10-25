@@ -29,6 +29,9 @@ G_GNUC_INTERNAL JSValue _gum_quick_script_rethrow_parse_error_with_decorations (
 
 G_GNUC_INTERNAL void _gum_quick_panic (JSContext * ctx, const gchar * prefix);
 
+// need this to tear down script in core
+G_GNUC_INTERNAL void _gum_quick_script_dispose_cancelled_script (GumQuickScript * self);
+
 G_END_DECLS
 
 #endif

@@ -348,6 +348,18 @@ gum_quick_script_init (GumQuickScript * self)
   self->on_unload = NULL;
 }
 
+
+void
+_gum_quick_script_dispose_cancelled_script (GumQuickScript * self)
+{
+  if (!self->is_cancelled)
+    return;
+  GPRINT_CTAG(BLUE, "[dispose-cancelled-script]", "script is cancelled, \
+          remove int. handler & teardown!\n");
+  gum_quick_remove_interrupt_handler(self);
+  gum_quick_script_dispose((GObject *) self);
+}
+
 static void
 gum_quick_script_dispose (GObject * object)
 {
@@ -886,16 +898,14 @@ gum_quick_script_execute_entrypoints (GumQuickScript * self,
   {
     self->state = GUM_SCRIPT_STATE_LOADED;
 
-    // end of execution: remove interrupt handler
-    gum_quick_remove_interrupt_handler(self);
-
     gum_script_task_return_pointer (task, NULL, NULL);
 
     // handle cancelled script
     if (self->is_cancelled) {
+      GPRINT_CTAG(BLUE, "[execute-entrypoints]", "script is cancelled, \
+          remove int. handler & teardown!\n");
       // dispose and unload early
-      gum_quick_script_dispose((GObject *) self);
-
+      _gum_quick_script_dispose_cancelled_script(self);
     }
   }
 }
