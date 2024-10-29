@@ -15,6 +15,7 @@ struct _GumScriptScheduler
   gboolean enable_background_thread;
   GThread * js_thread;
   GMainLoop * js_loop;
+  gchar * js_thread_name;
   GMainContext * js_context;
   volatile gint start_request_seqno;
 
@@ -55,6 +56,7 @@ gum_script_scheduler_init (GumScriptScheduler * self)
   self->enable_background_thread = TRUE;
 
   self->js_context = g_main_context_new ();
+  self->js_thread_name = NULL;
 }
 
 static void
@@ -103,6 +105,13 @@ gum_script_scheduler_disable_background_thread (GumScriptScheduler * self)
   self->enable_background_thread = FALSE;
 }
 
+void gum_script_scheduler_set_thread_name (GumScriptScheduler * self,
+                                            gchar * thread_name)
+{
+  if (thread_name)
+    self->js_thread_name = g_strdup(thread_name);
+}
+
 void
 gum_script_scheduler_start (GumScriptScheduler * self)
 {
@@ -114,8 +123,13 @@ gum_script_scheduler_start (GumScriptScheduler * self)
   {
     self->js_loop = g_main_loop_new (self->js_context, TRUE);
 
-    self->js_thread = g_thread_new ("gum-js-loop",
-        (GThreadFunc) gum_script_scheduler_run_js_loop, self);
+    if (self->js_thread_name) {
+      self->js_thread = g_thread_new (self->js_thread_name,
+          (GThreadFunc) gum_script_scheduler_run_js_loop, self);
+    } else {
+      self->js_thread = g_thread_new ("gum-js-loop",
+          (GThreadFunc) gum_script_scheduler_run_js_loop, self);
+    }
   }
 }
 
@@ -131,6 +145,11 @@ gum_script_scheduler_stop (GumScriptScheduler * self)
 
     g_main_loop_unref (self->js_loop);
     self->js_loop = NULL;
+
+    if (self->js_thread_name) {
+      g_free(self->js_thread_name);
+      self->js_thread_name = NULL;
+    }
 
     g_atomic_int_set (&self->start_request_seqno, 0);
   }

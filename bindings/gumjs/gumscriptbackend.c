@@ -142,6 +142,13 @@ gum_script_backend_obtain_v8 (void)
 #endif
 
 void
+gum_script_backend_set_thread_name (GumScriptBackend * self,
+    const gchar * thread_name)
+{
+  GUM_SCRIPT_BACKEND_GET_IFACE (self)->set_thread_name (self, thread_name);
+}
+
+void
 gum_script_backend_create (GumScriptBackend * self,
                            const gchar * name,
                            const gchar * source,

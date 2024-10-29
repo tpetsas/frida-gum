@@ -77,6 +77,9 @@ static JSModuleDef * gum_load_module_during_runtime (JSContext * ctx,
     const char * module_name, void * opaque);
 static JSValue gum_compile_module (JSContext * ctx, const GumESAsset * asset);
 
+static void gum_quick_script_backend_set_thread_name (
+    GumScriptBackend * backend, const gchar * thread_name);
+
 static void gum_quick_script_backend_create (GumScriptBackend * backend,
     const gchar * name, const gchar * source, GBytes * snapshot,
     GCancellable * cancellable, GAsyncReadyCallback callback,
@@ -188,6 +191,7 @@ gum_quick_script_backend_iface_init (gpointer g_iface,
 {
   GumScriptBackendInterface * iface = g_iface;
 
+  iface->set_thread_name = gum_quick_script_backend_set_thread_name;
   iface->create = gum_quick_script_backend_create;
   iface->create_finish = gum_quick_script_backend_create_finish;
   iface->create_sync = gum_quick_script_backend_create_sync;
@@ -654,6 +658,17 @@ GumScriptScheduler *
 gum_quick_script_backend_get_scheduler (GumQuickScriptBackend * self)
 {
   return self->scheduler;
+}
+
+static void
+gum_quick_script_backend_set_thread_name (GumScriptBackend * backend,
+                                 const gchar * thread_name)
+{
+  GumQuickScriptBackend * self;
+  self = GUM_QUICK_SCRIPT_BACKEND (backend);
+
+  if (thread_name)
+    gum_script_scheduler_set_thread_name (self->scheduler, (gchar *) thread_name);
 }
 
 static void

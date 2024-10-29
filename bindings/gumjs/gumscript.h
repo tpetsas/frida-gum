@@ -44,6 +44,7 @@ struct _GumScriptInterface
       GumScriptDebugMessageHandler handler, gpointer data,
       GDestroyNotify data_destroy);
   void (* post_debug_message) (GumScript * self, const gchar * message);
+  void (* set_thread_name) (GumScript * script, const gchar * thread_name);
 
   GumStalker * (* get_stalker) (GumScript * self);
 };
@@ -65,6 +66,8 @@ GUM_API void gum_script_set_message_handler (GumScript * self,
     GDestroyNotify data_destroy);
 GUM_API void gum_script_post (GumScript * self, const gchar * message,
     GBytes * data);
+GUM_API void gum_script_post_with_thead_name (GumScript * self,
+    const gchar * message, GBytes * data, const gchar* name);
 
 GUM_API void gum_script_set_debug_message_handler (GumScript * self,
     GumScriptDebugMessageHandler handler, gpointer data,
@@ -73,6 +76,9 @@ GUM_API void gum_script_post_debug_message (GumScript * self,
     const gchar * message);
 
 GUM_API GumStalker * gum_script_get_stalker (GumScript * self);
+
+GUM_API void gum_script_set_thread_name (GumScript * self,
+    const gchar * thread_name);
 
 G_END_DECLS
 

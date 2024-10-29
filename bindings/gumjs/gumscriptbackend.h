@@ -24,6 +24,8 @@ struct _GumScriptBackendInterface
 {
   GTypeInterface parent;
 
+  void (* set_thread_name) (GumScriptBackend * self,
+    const gchar * thread_name);
   void (* create) (GumScriptBackend * self, const gchar * name,
       const gchar * source, GBytes * snapshot, GCancellable * cancellable,
       GAsyncReadyCallback callback, gpointer user_data);
@@ -65,6 +67,9 @@ struct _GumScriptBackendInterface
 GUM_API GumScriptBackend * gum_script_backend_obtain (void);
 GUM_API GumScriptBackend * gum_script_backend_obtain_qjs (void);
 GUM_API GumScriptBackend * gum_script_backend_obtain_v8 (void);
+
+GUM_API void gum_script_backend_set_thread_name (GumScriptBackend * self,
+    const gchar * thread_name);
 
 GUM_API void gum_script_backend_create (GumScriptBackend * self,
     const gchar * name, const gchar * source, GBytes * snapshot,

@@ -25,6 +25,7 @@ GUM_API void gum_script_scheduler_enable_background_thread (
     GumScriptScheduler * self);
 GUM_API void gum_script_scheduler_disable_background_thread (
     GumScriptScheduler * self);
+GUM_API void gum_script_scheduler_set_thread_name (GumScriptScheduler * self, gchar * thread_name);
 GUM_API void gum_script_scheduler_start (GumScriptScheduler * self);
 GUM_API void gum_script_scheduler_stop (GumScriptScheduler * self);
 

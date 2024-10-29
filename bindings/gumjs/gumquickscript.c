@@ -70,6 +70,7 @@ struct _GumQuickScript
   GumQuickMemory memory;
   GumQuickModule module;
   GumQuickThread thread;
+  gchar * thread_name;
   GumQuickProcess process;
   GumQuickFile file;
   GumQuickChecksum checksum;
@@ -277,9 +278,8 @@ static GumWorkerMessageDelivery * gum_worker_message_delivery_new (
     GumQuickWorker * worker, const gchar * message, GBytes * data);
 static void gum_worker_message_delivery_free (GumWorkerMessageDelivery * d);
 
-static void gum_quick_register_interrupt_handler(GumQuickScript * script);
-
-static void gum_quick_remove_interrupt_handler(GumQuickScript * script);
+static void gum_quick_script_set_thread_name (GumScript * script,
+    const gchar * thread_name);
 
 G_DEFINE_TYPE_EXTENDED (GumQuickScript,
                         gum_quick_script,
@@ -333,6 +333,7 @@ gum_quick_script_iface_init (gpointer g_iface,
 
   iface->set_message_handler = gum_quick_script_set_message_handler;
   iface->post = gum_quick_script_post;
+  iface->set_thread_name = gum_quick_script_set_thread_name;
 
   iface->set_debug_message_handler = gum_quick_script_set_debug_message_handler;
   iface->post_debug_message = gum_quick_script_post_debug_message;
@@ -395,6 +396,8 @@ gum_quick_script_finalize (GObject * object)
   GumQuickScript * self = GUM_QUICK_SCRIPT (object);
 
   g_free (self->name);
+  if (self->thread_name)
+    g_free (self->thread_name);
   g_free (self->source);
   g_bytes_unref (self->bytecode);
 
@@ -503,11 +506,18 @@ gum_quick_script_create_context (GumQuickScript * self,
   JS_DefinePropertyValueStr (ctx, global_obj, "global",
       JS_DupValue (ctx, global_obj), JS_PROP_C_W_E);
 
+
+  GumScriptScheduler * scheduler = gum_quick_script_backend_get_scheduler (
+                                    self->backend);
+  // if a thread name has been provided, propagate it
+  if (self->thread_name)
+    gum_script_scheduler_set_thread_name (scheduler, self->thread_name);
+
   _gum_quick_core_init (core, self, ctx, global_obj,
       gum_quick_script_backend_get_scope_mutex (self->backend),
       program, gumjs_frida_source_map, &self->interceptor, &self->stalker,
       (GumQuickMessageEmitter) gum_quick_script_emit, self,
-      gum_quick_script_backend_get_scheduler (self->backend));
+      scheduler);
 
   core->current_scope = &scope;
 
@@ -1412,6 +1422,9 @@ gum_quick_worker_new (GumQuickScript * script,
 
   worker->scheduler = gum_script_scheduler_new ();
 
+  if (script->thread_name)
+    gum_script_scheduler_set_thread_name (worker->scheduler, script->thread_name);
+
   g_rec_mutex_init (&worker->scope_mutex);
 
   worker->rt = gum_quick_script_backend_make_runtime (script->backend);
@@ -1717,6 +1730,15 @@ gum_worker_message_delivery_free (GumWorkerMessageDelivery * d)
   _gum_quick_worker_unref (d->worker);
 
   g_slice_free (GumWorkerMessageDelivery, d);
+}
+
+static void
+gum_quick_script_set_thread_name (GumScript * script,
+    const gchar * thread_name)
+{
+  GumQuickScript * self = GUM_QUICK_SCRIPT (script);
+  if (thread_name)
+    self->thread_name = g_strdup (thread_name);
 }
 
 JSValue
