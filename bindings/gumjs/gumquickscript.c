@@ -281,6 +281,9 @@ static void gum_worker_message_delivery_free (GumWorkerMessageDelivery * d);
 static void gum_quick_script_set_thread_name (GumScript * script,
     const gchar * thread_name);
 
+static void gum_quick_script_set_thread_name (GumScript * script,
+    const gchar * thread_name);
+
 G_DEFINE_TYPE_EXTENDED (GumQuickScript,
                         gum_quick_script,
                         G_TYPE_OBJECT,
