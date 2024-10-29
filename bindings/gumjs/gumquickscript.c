@@ -59,6 +59,7 @@ struct _GumQuickScript
   GumQuickScriptBackend * backend;
 
   GumScriptState state;
+  GRecMutex cancellation_mutex;
   gboolean is_cancelled;
   GSList * on_unload;
   JSRuntime * rt;
@@ -352,12 +353,13 @@ gum_quick_script_init (GumQuickScript * self)
 void
 _gum_quick_script_dispose_cancelled_script (GumQuickScript * self)
 {
-  if (!self->is_cancelled)
-    return;
-  GPRINT_CTAG(BLUE, "[dispose-cancelled-script]", "script is cancelled, \
-          remove int. handler & teardown!\n");
-  gum_quick_remove_interrupt_handler(self);
-  gum_quick_script_dispose((GObject *) self);
+  g_rec_mutex_lock (&self->cancellation_mutex);
+  if (self->is_cancelled) {
+    GPRINT_CTAG(BLUE, "[dispose-cancelled-script]", "script is cancelled, \
+            remove int. handler & teardown!\n");
+    gum_quick_script_dispose ((GObject *) self);
+  }
+  g_rec_mutex_unlock (&self->cancellation_mutex);
 }
 
 static void
@@ -365,10 +367,13 @@ gum_quick_script_dispose (GObject * object)
 {
   GumQuickScript * self = GUM_QUICK_SCRIPT (object);
   GumScript * script = GUM_SCRIPT (self);
-  GPRINT_CTAG(BOLDMAGENTA, "[dispose]", "is script cacnelled: %d\n", self->is_cancelled);
 
   gum_quick_script_set_message_handler (script, NULL, NULL, NULL);
 
+  gum_quick_remove_interrupt_handler(self);
+
+
+  g_rec_mutex_lock (&self->cancellation_mutex);
   if (self->state == GUM_SCRIPT_STATE_LOADED || self->is_cancelled)
   {
     /* dispose() will be triggered again at the end of unload() */
@@ -382,6 +387,7 @@ gum_quick_script_dispose (GObject * object)
     g_clear_pointer (&self->main_context, g_main_context_unref);
     g_clear_pointer (&self->backend, g_object_unref);
   }
+  g_rec_mutex_unlock (&self->cancellation_mutex);
 
   G_OBJECT_CLASS (gum_quick_script_parent_class)->dispose (object);
 }
@@ -546,6 +552,10 @@ gum_quick_script_create_context (GumQuickScript * self,
   g_bytes_unref (self->bytecode);
   self->bytecode = NULL;
 
+  g_rec_mutex_init (&self->cancellation_mutex);
+  self->is_cancelled = false;
+  gum_quick_register_interrupt_handler (self);
+
   return TRUE;
 
 malformed_program:
@@ -614,6 +624,9 @@ gum_quick_script_destroy_context (GumQuickScript * self)
     JS_FreeContext (self->ctx);
     self->ctx = NULL;
 
+    self->is_cancelled = false;
+    g_rec_mutex_clear (&self->cancellation_mutex);
+
     JS_FreeRuntime (self->rt);
     self->rt = NULL;
 
@@ -657,7 +670,6 @@ gum_quick_script_load (GumScript * script,
   GumQuickScript * self = GUM_QUICK_SCRIPT (script);
   GumScriptTask * task;
 
-  self->is_cancelled = false;
   task = gum_script_task_new ((GumScriptTaskFunc) gum_quick_script_do_load,
       self, cancellable, callback, user_data);
   gum_script_task_run_in_js_thread (task,
@@ -679,7 +691,6 @@ gum_quick_script_load_sync (GumScript * script,
   GumQuickScript * self = GUM_QUICK_SCRIPT (script);
   GumScriptTask * task;
 
-  self->is_cancelled = false;
   task = gum_script_task_new ((GumScriptTaskFunc) gum_quick_script_do_load,
       self, cancellable, NULL, NULL);
   gum_script_task_run_in_js_thread_sync (task,
@@ -700,7 +711,7 @@ gum_quick_script_do_load (GumScriptTask * task,
 
   self->state = GUM_SCRIPT_STATE_LOADING;
 
-  gum_quick_register_interrupt_handler(self);
+  //gum_quick_register_interrupt_handler(self);
 
   gum_quick_script_execute_entrypoints (self, task);
 
@@ -727,6 +738,7 @@ gum_cancellable_interrupt_handler (JSRuntime * runtime,
 
   int rc = 0;
 
+  g_rec_mutex_lock (&script->cancellation_mutex);
   // Check if we are cancelled
   if (script->is_cancelled) {
     GPRINT_CTAG (ORANGE, "[int-handler]", "In our interrupt handler!!\n");
@@ -736,6 +748,7 @@ gum_cancellable_interrupt_handler (JSRuntime * runtime,
         script, timestamp_str);
     rc = 1;
   }
+  g_rec_mutex_unlock (&script->cancellation_mutex);
 
   g_object_unref (script);
 
@@ -745,7 +758,12 @@ gum_cancellable_interrupt_handler (JSRuntime * runtime,
 static void
 gum_quick_register_interrupt_handler(GumQuickScript * script) {
   GPRINT_CTAG(ORANGE, "[int-handler-register]", "Registering int. handler!\n");
+
+  g_rec_mutex_lock (&script->cancellation_mutex);
   g_assert (script->is_cancelled == false);
+  g_rec_mutex_unlock (&script->cancellation_mutex);
+
+
   JS_SetInterruptHandler (script->rt, gum_cancellable_interrupt_handler,
       script);
 }
@@ -864,21 +882,20 @@ gum_quick_script_execute_entrypoints (GumQuickScript * self,
       if (JS_IsException (result))
       {
         JSValue exception = JS_GetException(ctx);
-        const char *error = JS_ToCString(ctx, exception);
-        GPRINT_CTAG(BLUE, "[execute-entrypoints]", "Script Error: %s\n", error);
-        JS_FreeCString(ctx, error);
+        const char *errorCStr = JS_ToCString(ctx, exception);
+        GPRINT_CTAG(BLUE, "[execute-entrypoints]", "Script Error: %s\n", errorCStr);
         JS_FreeValue(ctx, exception);
 
         // if this was due to script cancellation break here and handle it
-        if (self->is_cancelled) {
-          // TODO: We can check also that the exception was an internal error:
-          // interrupted, generated by our interrupt handler
+        if (strstr(errorCStr, "InternalError: interrupted") != NULL) {
+          JS_FreeCString (ctx, errorCStr);
           JS_FreeValue (ctx, result);
           break;
         }
 
-        _gum_quick_scope_catch_and_emit (&scope);
+        JS_FreeCString (ctx, errorCStr);
         JS_FreeValue (ctx, result);
+        _gum_quick_scope_catch_and_emit (&scope);
 
       }
 
@@ -901,12 +918,12 @@ gum_quick_script_execute_entrypoints (GumQuickScript * self,
     gum_script_task_return_pointer (task, NULL, NULL);
 
     // handle cancelled script
+    g_rec_mutex_lock (&self->cancellation_mutex);
     if (self->is_cancelled) {
-      GPRINT_CTAG(BLUE, "[execute-entrypoints]", "script is cancelled, \
-          remove int. handler & teardown!\n");
       // dispose and unload early
       _gum_quick_script_dispose_cancelled_script(self);
     }
+    g_rec_mutex_unlock (&self->cancellation_mutex);
   }
 }
 
@@ -1014,7 +1031,10 @@ static void
 gum_quick_script_cancel (GumScript * script)
 {
   GumQuickScript * self = GUM_QUICK_SCRIPT (script);
+
+  g_rec_mutex_lock (&self->cancellation_mutex);
   self->is_cancelled = true;
+  g_rec_mutex_unlock (&self->cancellation_mutex);
 }
 
 
@@ -1039,10 +1059,13 @@ gum_quick_script_do_unload (GumScriptTask * task,
                             gpointer task_data,
                             GCancellable * cancellable)
 {
-  if (!self->is_cancelled || self->state != GUM_SCRIPT_STATE_LOADED)
+  g_rec_mutex_lock (&self->cancellation_mutex);
+  if (!self->is_cancelled || self->state != GUM_SCRIPT_STATE_LOADED) {
+    g_rec_mutex_unlock (&self->cancellation_mutex);
     goto invalid_operation;
+  }
+  g_rec_mutex_unlock (&self->cancellation_mutex);
 
-  GPRINT_CTAG_IC(BOLDMAGENTA, "[do-unload]", "task: 0x%p - is script cacnelled: %d\n", task, self->is_cancelled);
   self->state = GUM_SCRIPT_STATE_UNLOADING;
   gum_quick_script_once_unloaded (self,
       (GumUnloadNotifyFunc) gum_quick_script_complete_unload_task,
@@ -1076,9 +1099,10 @@ gum_quick_script_try_unload (GumQuickScript * self)
   GumQuickScope scope;
   gboolean success;
 
+  g_rec_mutex_lock (&self->cancellation_mutex);
   g_assert (self->state == GUM_SCRIPT_STATE_UNLOADING || self->is_cancelled);
-
   GPRINT_CTAG_IC(BOLDMAGENTA, "[try-unload]", "is script cancelled: %d\n", self->is_cancelled);
+  g_rec_mutex_unlock (&self->cancellation_mutex);
 
   _gum_quick_scope_enter (&scope, &self->core);
 
