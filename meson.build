@@ -12,7 +12,7 @@ enable_bitcode = get_option('bitcode')
 if enable_bitcode
   message('Embedding Bitcode')
 
-  add_project_arguments(['-fembed-bitcode'], language: ['c', 'cpp'])
+  add_project_arguments(['-fembed-bitcode', '-fvisibility=hidden', '-fvisibility-inlines-hidden'], language: ['c', 'cpp'])
   add_project_link_arguments(['-fembed-bitcode', '-flto'], language: ['c', 'cpp'])
 endif
 
