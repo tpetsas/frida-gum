@@ -6,33 +6,6 @@
 
 #include "gumscripttask.h"
 
-struct _GumScriptTask
-{
-  GObject parent;
-
-  gboolean disposed;
-
-  GumScriptTaskFunc func;
-  gpointer source_object;
-  gpointer source_tag;
-  GCancellable * cancellable;
-  GAsyncReadyCallback callback;
-  gpointer callback_data;
-  gpointer task_data;
-  GDestroyNotify task_data_destroy;
-
-  GMainContext * context;
-
-  gboolean synchronous;
-  GMutex mutex;
-  GCond cond;
-
-  volatile gboolean completed;
-  gpointer result;
-  GDestroyNotify result_destroy;
-  GError * error;
-};
-
 static void gum_script_task_iface_init (GAsyncResultIface * iface);
 static void gum_script_task_dispose (GObject * obj);
 static void gum_script_task_finalize (GObject * obj);

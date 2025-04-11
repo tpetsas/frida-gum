@@ -674,6 +674,22 @@ invalid_operation:
   }
 }
 
+static int
+gum_cancellable_interrupt_handler (JSRuntime * runtime,
+                                   void * opaque)
+{
+    if (opaque == NULL)
+      return 0;
+
+    GCancellable *cancellable = (GCancellable *)opaque;
+
+    // Check if the operation was cancelled
+    if (g_cancellable_is_cancelled (cancellable))
+      return 1;
+
+    return 0;
+}
+
 static void
 gum_quick_script_execute_entrypoints (GumQuickScript * self,
                                       GumScriptTask * task)
@@ -683,6 +699,13 @@ gum_quick_script_execute_entrypoints (GumQuickScript * self,
   GArray * entrypoints;
   guint i;
   gboolean done;
+
+  // Check if the task was provided a cancellable
+  if (task->cancellable != NULL)
+  {
+    JSRuntime * runtime = JS_GetRuntime (ctx);
+    JS_SetInterruptHandler (runtime, gum_cancellable_interrupt_handler, task->cancellable);
+  }
 
   _gum_quick_scope_enter (&scope, &self->core);
 
