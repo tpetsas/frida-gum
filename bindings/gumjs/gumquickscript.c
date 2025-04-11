@@ -280,9 +280,8 @@ static void gum_worker_message_delivery_free (GumWorkerMessageDelivery * d);
 
 static void gum_quick_script_set_thread_name (GumScript * script,
     const gchar * thread_name);
-
-static void gum_quick_script_set_thread_name (GumScript * script,
-    const gchar * thread_name);
+static void gum_quick_register_interrupt_handler(GumQuickScript * script);
+static void gum_quick_remove_interrupt_handler(GumQuickScript * script);
 
 G_DEFINE_TYPE_EXTENDED (GumQuickScript,
                         gum_quick_script,
