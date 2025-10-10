@@ -1,3 +1,4 @@
+#define ENABLE_DEBUG_PRINTS 0
 
 // XXX for debugging prints
 #define RESET   "\033[0m"
@@ -19,6 +20,8 @@
 #define BOLDWHITE   "\033[1m\033[37m"      /* Bold White */
 #define BOLDMAGENTA "\033[1m\033[35m"      /* Bold Magenta */
 
+#if ENABLE_DEBUG_PRINTS
+
 // g_print with color on tag only
 #define GPRINT_CTAG(colorTag, tag, format, ...) \
     g_print(colorTag tag RESET " " "[%lu]" " " format, gum_process_get_current_thread_id(),  ##__VA_ARGS__); \
@@ -39,3 +42,12 @@
       g_print(color format RESET, ##__VA_ARGS__); \
     } \
   } while (0)
+
+#else
+
+#define GPRINT_CTAG(colorTag, tag, format, ...) ((void)0)
+#define GPRINT_C(color, format, ...) ((void)0)
+#define GPRINT_CTAG_IC(colorTag, tag, format, ...) ((void)0)
+#define GPRINT_C_IC(color, format, ...) ((void)0)   
+
+#endif
