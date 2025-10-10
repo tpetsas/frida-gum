@@ -1,3 +1,4 @@
 [submodule "releng"]
 	path = releng
-	url = https://github.com/frida/releng.git
+	url = https://github.com/diazepine/releng.git
+	branch = use-patched-glib
