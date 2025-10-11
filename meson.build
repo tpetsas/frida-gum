@@ -285,6 +285,11 @@ if get_option('b_sanitize') == 'address'
   cdata.set('HAVE_ASAN', 1)
 endif
 
+if get_option('fallible_gprivate')
+  add_project_arguments('-DG_FALLIBLE_GPRIVATE=1', language : 'c')
+  summary('gprivate fallible', 'yes', section: 'Options')
+endif
+
 if cc.compiles('''#pragma pack (push, 1)
                   struct _Foo
                   {

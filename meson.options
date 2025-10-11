@@ -107,3 +107,10 @@ option('cmodule',
   value: 'enabled',
   description: 'Include or exclude the cmodule feature'
 )
+
+
+option('fallible_gprivate',
+  type : 'boolean',
+  value : false,
+  description : 'Make GPrivate fallible instead of aborting'
+)
