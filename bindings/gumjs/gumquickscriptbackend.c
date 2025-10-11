@@ -707,6 +707,25 @@ gum_quick_script_backend_create_sync (GumScriptBackend * backend,
                                       GCancellable * cancellable,
                                       GError ** error)
 {
+#if defined(G_FALLIBLE_GPRIVATE)
+  /*
+   * If GLib TLS (GPrivate) is exhausted/unavailable, running the JS runtime
+   * isn’t safe — gum’s scheduler relies on per-thread main contexts and
+   * condition variables tied to them. Fail early with a clear error instead of
+   * deadlocking later during synchronous script creation.
+   */
+  if (G_UNLIKELY (!glib_is_available ()))
+  {
+    if (error != NULL)
+    {
+      g_set_error (error,
+          G_IO_ERROR,                 /* Pick a well-known domain */
+          G_IO_ERROR_NOT_INITIALIZED, /* Or G_IO_ERROR_FAILED if you prefer */
+          "GLib TLS not available: refusing to start the JS runtime");
+    }
+    return NULL;
+  }
+#endif
   GumScript * script;
   GumQuickScriptBackend * self;
   GumScriptTask * task;
