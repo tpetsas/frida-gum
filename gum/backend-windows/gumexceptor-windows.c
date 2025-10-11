@@ -171,6 +171,11 @@ gum_exceptor_backend_dispatch (EXCEPTION_POINTERS * exception_info)
   gum_windows_parse_context (context, cpu_context);
   ed.native_context = context;
 
+#if defined(G_FALLIBLE_GPRIVATE)
+  if (G_UNLIKELY (!glib_is_available ()))
+    return EXCEPTION_CONTINUE_SEARCH;
+#endif
+
   g_private_set (&gum_active_context_key, context);
   handled = self->handler (&ed, self->handler_data);
   g_private_set (&gum_active_context_key, NULL);
@@ -187,5 +192,9 @@ gum_exceptor_backend_dispatch (EXCEPTION_POINTERS * exception_info)
 CONTEXT *
 gum_windows_get_active_exceptor_context (void)
 {
+#if defined(G_FALLIBLE_GPRIVATE)
+  if (G_UNLIKELY (!glib_is_available ()))
+    return NULL;
+#endif
   return g_private_get (&gum_active_context_key);
 }

@@ -47,6 +47,9 @@
 
 G_BEGIN_DECLS
 
+/* Returns FALSE and sets @error if GLib TLS isn’t available. */
+gboolean try_gum_init_embedded (GError **error);
+
 GUM_API void gum_init (void);
 GUM_API void gum_shutdown (void);
 GUM_API void gum_deinit (void);

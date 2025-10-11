@@ -657,7 +657,13 @@ GumInvocationStack *
 gum_interceptor_get_current_stack (void)
 {
   InterceptorThreadContext * context;
-
+#if defined(G_FALLIBLE_GPRIVATE)
+  if (G_UNLIKELY (!glib_is_available ())) {
+    context = get_interceptor_thread_context ();
+    /* With the fallback above, context is never NULL */
+    return context->stack;
+  }
+#endif
   context = g_private_get (&gum_interceptor_context_private);
   if (context == NULL)
     return &_gum_interceptor_empty_stack;
@@ -1736,7 +1742,20 @@ static InterceptorThreadContext *
 get_interceptor_thread_context (void)
 {
   InterceptorThreadContext * context;
-
+#if defined(G_FALLIBLE_GPRIVATE)
+ static InterceptorThreadContext *fallback_ctx = NULL;
+ static gsize fallback_inited = 0;
+ if (G_UNLIKELY (!glib_is_available ())) {
+    /* One per process; avoids NULL derefs and keeps interceptor usable
+       even when TLS (GPrivate) is unavailable/exhausted. */
+    if (g_once_init_enter (&fallback_inited)) {
+      InterceptorThreadContext *tmp = interceptor_thread_context_new ();
+      fallback_ctx = tmp;
+      g_once_init_leave (&fallback_inited, 1);
+    }
+    return fallback_ctx;
+  }
+#endif
   context = g_private_get (&gum_interceptor_context_private);
   if (context == NULL)
   {
@@ -1746,9 +1765,17 @@ get_interceptor_thread_context (void)
     g_hash_table_add (gum_interceptor_thread_contexts, context);
     gum_spinlock_release (&gum_interceptor_thread_context_lock);
 
+#if !defined(G_FALLIBLE_GPRIVATE)
+    g_private_set (&gum_interceptor_context_private, context);
+#else
+  /* very rare to reach this case as we would have already return
+   * NULL above */
+  if (G_LIKELY (glib_is_available ())) {
     g_private_set (&gum_interceptor_context_private, context);
   }
-
+  /* else: skip */
+#endif
+  }
   return context;
 }
 

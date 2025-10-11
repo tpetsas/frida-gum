@@ -1430,6 +1430,10 @@ _gum_stalker_do_follow_me (GumStalker * self,
                            GumEventSink * sink,
                            gpointer * ret_addr_ptr)
 {
+#if defined(G_FALLIBLE_GPRIVATE)
+    if (G_UNLIKELY (!glib_is_available ()))
+        return; /* cannot install per-thread context without TLS */
+#endif
   GumExecCtx * ctx;
   gpointer code_address;
 
@@ -1541,6 +1545,10 @@ gum_stalker_infect (GumThreadId thread_id,
                     GumCpuContext * cpu_context,
                     gpointer user_data)
 {
+#if defined(G_FALLIBLE_GPRIVATE)
+  if (G_UNLIKELY (!glib_is_available ()))
+    return;
+#endif
   GumInfectContext * infect_context = (GumInfectContext *) user_data;
   GumStalker * self = infect_context->stalker;
   GumExecCtx * ctx;
@@ -2179,6 +2187,10 @@ _gum_stalker_modify_to_run_on_thread (GumStalker * self,
                                       GumStalkerRunOnThreadFunc func,
                                       gpointer data)
 {
+#if defined(G_FALLIBLE_GPRIVATE)
+  if (G_UNLIKELY (!glib_is_available ()))
+    return;
+#endif
   GumExecCtx * ctx;
   guint8 * pc;
   GumX86Writer * cw;
@@ -2294,6 +2306,10 @@ gum_stalker_destroy_exec_ctx (GumStalker * self,
 static GumExecCtx *
 gum_stalker_get_exec_ctx (void)
 {
+#if defined(G_FALLIBLE_GPRIVATE)
+  if (G_UNLIKELY (!glib_is_available ()))
+    return NULL;
+#endif
   return g_private_get (&gum_stalker_exec_ctx_private);
 }
 

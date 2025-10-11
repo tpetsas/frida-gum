@@ -131,6 +131,29 @@ G_DEFINE_QUARK (gum-error-quark, gum_error)
 G_DEFINE_BOXED_TYPE (GumAddress, gum_address, gum_address_copy,
                      gum_address_free)
 
+
+
+static GQuark
+gum_error_quark_impl (void)
+{
+  return g_quark_from_static_string ("frida-gum");
+}
+
+gboolean
+try_gum_init_embedded (GError **error)
+{
+#if defined(G_FALLIBLE_GPRIVATE)
+  /* Your patched GLib exports glib_is_available(). */
+  if (G_UNLIKELY (!glib_is_available ())) {
+    g_set_error (error, GUM_ERROR, GUM_ERROR_FAILED,
+                 "GLib TLS not available");
+    return FALSE;
+  }
+#endif
+  gum_init_embedded ();
+  return TRUE;
+}
+
 void
 gum_init (void)
 {
@@ -402,6 +425,18 @@ gum_on_thread_realize (void)
 
   for (i = 0; i != details->n_cloaked_ranges; i++)
     gum_cloak_add_range (&details->cloaked_ranges[i]);
+
+#if defined(G_FALLIBLE_GPRIVATE)
+  /* No TLS -> don’t install a thread-local destructor; clean up now. */
+  if (G_UNLIKELY (!glib_is_available ())) {
+    /* mirror gum_internal_thread_details_free(): */
+    for (i = 0; i != details->n_cloaked_ranges; i++)
+      gum_cloak_remove_range (&details->cloaked_ranges[i]);
+    gum_cloak_remove_thread (details->thread_id);
+    g_slice_free (GumInternalThreadDetails, details);
+    return;
+  }
+#endif
 
   /* This allows us to free the data no matter how the thread exits */
   g_private_set (&gum_internal_thread_details_key, details);
